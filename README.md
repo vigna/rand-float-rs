@@ -3,10 +3,14 @@
 This crate implements several techniques for generating uniform random
 floating-point numbers in [0 . . 1) from a stream of random bits.
 
-The motivation was the state of disarray of the literature on the topic:
-academic papers, GitHub repositories, and free-floating sources, often lacking
-comparison with other approaches, a few bugs, a in some cases definitely hostile
-notation.
+A [relatively innocuous pull
+request](https://github.com/smol-rs/fastrand/pull/129) ended up in a rabbit hole
+that led to this crate. The motivation was the state of disarray of the
+literature on the topic: academic papers, GitHub repositories, and free-floating
+sources, often lacking comparison with other approaches, a few bugs, and in some
+cases definitely hostile notation. By gathering all techniques in the same
+place, we have a common ground for comparison and benchmarking, and cross
+references for future implementations.
 
 Every technique is implemented as a pure transformation of a source of
 uniform random 64-bit words (any `FnMut() -> u64`), documented with its
@@ -23,10 +27,10 @@ authors.
 | `pekkizen`          | [pekkizen's uniFloats](https://github.com/pekkizen/prng/wiki/uniFloats) (`Float64_64`)        | uniform real rounded down to a 2⁻⁶⁴ grid         | every float in [2⁻¹² . . 1); 2⁵² values spaced 2⁻⁶⁴ below 2⁻¹² | 1                    |
 | `campbell`          | Taylor R. Campbell's `binary64fast.c`                                                         | uniform real in [0 . . 1] rounded **to nearest** | every float in [2⁻¹²⁸ . . 1] and 0                             | 2 (or 3, const-time) |
 | `campbell` (`real`) | Taylor R. Campbell's [`random_real.c`](https://mumble.net/~campbell/2014/04/28/random_real.c) | uniform real in [0 . . 1] rounded **to nearest** | every float in [0 . . 1], including all subnormals             | 1.5 expected         |
-| `perfect`           | [fp-rand](https://github.com/specbranch/fp-rand/) (round-down variant)                        | uniform real in (0 . . 1) rounded **down**       | every float in [0 . . 1), including all subnormals             | 1 + ≈2⁻¹²            |
+| `badizadegan`       | [fp-rand](https://github.com/specbranch/fp-rand/) (round-down variant)                        | uniform real in (0 . . 1) rounded **down**       | every float in [0 . . 1), including all subnormals             | 1 + ≈2⁻¹²            |
 
 ```rust
-use rand_float_rs::{campbell, pekkizen, perfect, standard};
+use rand_float_rs::{badizadegan, campbell, pekkizen, standard};
 
 struct Xoroshiro128pp([u64; 2]);
 
@@ -44,7 +48,7 @@ let mut src = Xoroshiro128pp([0x243F6A8885A308D3, 0x13198A2E03707344]);
 let a = standard::f64_53bits(|| src.next_u64());
 let b = pekkizen::f64_64(|| src.next_u64());
 let c = campbell::fast(|| src.next_u64());
-let d = perfect::f64_down(|| src.next_u64());
+let d = badizadegan::f64_down(|| src.next_u64());
 ```
 
 ## Benchmarks
@@ -93,8 +97,8 @@ python/plot_bench.py bench.txt -o bench.pdf`.
 
 ## Acnknowledgments
 
-I would like to thank Dima Badizadegan, Taylor C. Campbell and Frédéric Goualard
-for interesting discussions and a lot of useful pointers,
+I would like to thank Dima Badizadegan, Taylor C. Campbell, Frédéric Goualard,
+and Reiner Pope for interesting discussions and a lot of useful pointers,
 
 ## Licensing
 
@@ -102,7 +106,7 @@ Original code in this crate is dual-licensed under Apache-2.0 or MIT. The
 ported techniques retain the licenses of their authors, reproduced in the
 header of the respective source files:
 
-- `src/perfect.rs` — MIT, Copyright (c) 2025 Nima Badizadegan
+- `src/badizadegan.rs` — MIT, Copyright (c) 2025 Nima Badizadegan
   ([fp-rand](https://github.com/specbranch/fp-rand/));
 - `src/campbell.rs` — BSD-2-Clause, Copyright (c) 2014-2026 Taylor R.
   Campbell (from `binary64fast.c` and `random_real.c`);

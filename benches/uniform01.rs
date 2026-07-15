@@ -2,14 +2,6 @@
 //! implemented by this crate (see the crate documentation for what each
 //! technique computes).
 //!
-//! All techniques draw from the same Weyl-sequence generator used by the
-//! benchmark harness of Campbell's `binary64fast.c`, so the per-word
-//! entropy cost is identical; differences reflect the conversion and the
-//! number of words each technique consumes (one for `standard`,
-//! `pekkizen` and — almost always — `perfect`; two for `campbell::fast`;
-//! three for the const-time variants). A `weyl_baseline` entry measures
-//! the bare generator.
-//!
 //! Two groups are measured: `per_call` times one conversion, and
 //! `fill_1024` fills an array of 1024 doubles per iteration (throughput
 //! is reported per element), which leaves the optimizer free to overlap
@@ -18,7 +10,7 @@
 use criterion::{
     BenchmarkGroup, Criterion, Throughput, criterion_group, criterion_main, measurement::WallTime,
 };
-use rand_float_rs::{campbell, pekkizen, perfect, sources::Weyl, standard};
+use rand_float_rs::{badizadegan, campbell, pekkizen, sources::Weyl, standard};
 
 const SEED: u64 = 0x0123_4567_89AB_CDEF;
 const FILL: usize = 1024;
@@ -39,9 +31,16 @@ fn bench_fill(g: &mut BenchmarkGroup<WallTime>, name: &str, mut f: impl FnMut(&m
         let mut rng = Weyl(SEED);
         let mut buf = [0.0f64; FILL];
         b.iter(|| {
+            // The source state must be a local of this closure: `Bencher::iter`
+            // is not inlined and receives the captured `&mut` pointers as plain
+            // struct fields without `noalias`, so a state living outside the
+            // closure cannot be kept in a register across the buffer writes and
+            // every conversion pays a load/store roundtrip on the state.
+            let mut local = Weyl(rng.0);
             for x in buf.iter_mut() {
-                *x = f(&mut rng);
+                *x = f(&mut local);
             }
+            rng.0 = local.0;
             std::hint::black_box(&buf);
         })
     });
@@ -61,7 +60,9 @@ macro_rules! bench_all {
             standard::f64_53bits(|| r.next_u64())
         });
         $one($g, "pekkizen_64", |r| pekkizen::f64_64(|| r.next_u64()));
-        $one($g, "perfect_down", |r| perfect::f64_down(|| r.next_u64()));
+        $one($g, "badizadegan_down", |r| {
+            badizadegan::f64_down(|| r.next_u64())
+        });
         $one($g, "campbell_fast", |r| campbell::fast(|| r.next_u64()));
         $one($g, "campbell_real", |r| campbell::real(|| r.next_u64()));
         $one($g, "campbell_consttime_cmove", |r| {

@@ -8,6 +8,9 @@
 //!
 //! This is by far the cheapest conversion, but most representable floats never
 //! occur: no nonzero value below 2⁻⁵³ can appear.
+//!
+//! Note that using a larger number of bits (e.g., Go used 63) leads to a
+//! nonuniform distribution because of the round-to-even of IEEE 754.
 
 /// 2⁻⁵³.
 const TWO_M53: f64 = 1.0 / (1u64 << 53) as f64;
