@@ -17,5 +17,5 @@ harness = false
 
 # Best inlining and stable measurements for the benchmarks.
 [profile.bench]
-lto = true
+lto = "fat"
 codegen-units = 1
