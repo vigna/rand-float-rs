@@ -75,17 +75,26 @@ python/plot_bench.py bench.txt -o bench.pdf`.
 
 ## Results
 
-### ARM M1
-
-![ARM M1](img/M1.png)
-
 ### AMD Ryzen 9 5950X
 
 ![AMD Ryzen 9 5950X](img/zen4.jpg)
 
-### Intel®️ Xeon®️ X5660 @2.80 GHz
+### 12th Gen Intel® Core™ i7-12700KF @3.60 GHz
 
-![Intel®️ Xeon®️ X5660 @2.80 GHz](img/XeonX5660.png)
+![12th Gen Intel® Core™ i7-12700KF @3.60 GHz](img/i7.png)
+
+### Intel® Xeon® X5660 @2.80 GHz
+
+![Intel® Xeon® X5660 @2.80 GHz](img/XeonX5660.png)
+
+### Apple M1 Max @2.50 GHz
+
+![Apple M1 Max @2.50 GHz](img/M1.png)
+
+## Acnknowledgments
+
+I would like to thank Dima Badizadegan, Taylor C. Campbell and Frédéric Goualard
+for interesting discussions and a lot of useful pointers,
 
 ## Licensing
 
