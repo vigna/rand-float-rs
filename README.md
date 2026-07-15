@@ -42,6 +42,24 @@ let d = perfect::f64_down(|| src.next_u64());
 `cargo bench` drives every technique with the same Weyl-sequence source
 (the one used by the benchmark harness of `binary64fast.c`, whose baseline
 cost is measured separately) in two settings: one conversion per call, and
-filling an array of 1024 doubles per iteration. `contrib/x86-bench.sh`
-additionally runs, pinned to a single CPU, the Go benchmarks of the fp-rand
-repository together with a corrected version of their baseline.
+filling an array of 1024 doubles per iteration.
+
+On CPUs with heterogeneous cores, pin the run to one core (build first so
+compilation stays parallel):
+
+```sh
+cargo bench --no-run
+taskset -c 2 cargo bench   # Linux; pick a performance core
+```
+
+To run the benchmarks and turn the results into a bar chart (ns per
+generated `f64`, single-call and array-fill bars side by side; requires
+Python with matplotlib) in one line:
+
+```sh
+cargo bench 2>&1 | python3 python/plot_bench.py -o bench.pdf
+```
+
+The output format follows the extension (`.pdf`, `.png`, `.svg`, ...), and
+the script also accepts a previously saved log: `python3
+python/plot_bench.py bench.txt -o bench.pdf`.
