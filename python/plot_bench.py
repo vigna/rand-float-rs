@@ -2,14 +2,14 @@
 """Plot the output of `cargo bench` as a grouped bar chart.
 
 Parses Criterion's terminal output (given as a file argument, or piped on
-standard input) and draws, for every technique, three side-by-side bars in
-ns per generated f64 (lower is better): the time per call of the
-`per_call` group, the same minus the bare-source baseline (i.e. the cost
-of the conversion alone — meaningful in the serial single-call setting,
-where source and conversion costs compose roughly additively), and the
-per-element time of the `fill_1024` group (not baseline-subtracted: in a
-vectorized fill loop the source is fused with the conversion, so the
-standalone baseline is not a valid subtrahend).
+standard input) and draws, for every technique, three side-by-side bars in ns
+per generated f64 (lower is better): the time per call of the `per_call` group,
+the same minus the bare-source baseline (i.e. the cost of the conversion alone,
+which is meaningful in the serial single-call setting, where source and
+conversion costs compose roughly additively), and the per-element time of the
+`fill_1024` group (not baseline-subtracted: in a vectorized fill loop the source
+is fused with the conversion, so the standalone baseline is not a valid
+subtrahend).
 
 Typical use:
 

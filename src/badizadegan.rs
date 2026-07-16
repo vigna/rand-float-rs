@@ -220,7 +220,7 @@ mod tests {
     }
 
     #[test]
-    fn known_values_f64() {
+    fn test_known_values_f64() {
         // Mantissa 2^51 -> partial 0.5, one vacant bit, backfilled with the
         // leftover bit 52 of the same word.
         assert_eq!(f64_down(replay(&[1 << 51])), 0.5);
@@ -247,7 +247,7 @@ mod tests {
     }
 
     #[test]
-    fn all_zeros_terminates_and_yields_zero() {
+    fn test_all_zeros_terminates_and_yields_zero() {
         // A broken all-zero source must walk down all exponent windows and
         // come out with exactly 0.0 (and must not loop forever).
         let mut n_calls = 0u32;
@@ -260,18 +260,18 @@ mod tests {
     }
 
     #[test]
-    fn all_zeros_terminates_and_yields_zero_f32() {
+    fn test_all_zeros_terminates_and_yields_zero_f32() {
         assert_eq!(f32_down(replay(&[0, 0, 0])), 0.0);
     }
 
     #[test]
-    fn all_ones_source() {
+    fn test_all_ones_source() {
         let x = f64_down(replay(&[!0u64]));
         assert_eq!(x, f64::from_bits(1.0f64.to_bits() - 1));
     }
 
     #[test]
-    fn range_and_moments_f64() {
+    fn test_range_and_moments_f64() {
         let mut src = Weyl(0xDEADBEEF);
         let n = 1_000_000;
         let mut sum = 0.0;
@@ -293,7 +293,7 @@ mod tests {
     }
 
     #[test]
-    fn range_and_moments_f32() {
+    fn test_range_and_moments_f32() {
         let mut src = Weyl(0xC0FFEE);
         let n = 1_000_000;
         let mut sum = 0.0f64;
@@ -307,7 +307,7 @@ mod tests {
     }
 
     #[test]
-    fn low_binades_are_reachable_and_correctly_distributed() {
+    fn test_low_binades_are_reachable_and_correctly_distributed() {
         // With 10^6 samples, P(x < 2^-10) should be ~2^-10 (~977 hits).
         let mut src = Weyl(42);
         let n = 1_000_000;
@@ -323,7 +323,7 @@ mod tests {
     }
 
     #[test]
-    fn entropy_pool_bit_accounting() {
+    fn test_entropy_pool_bit_accounting() {
         // 64 bits requested 8 at a time must reproduce the word exactly.
         let word = 0x0123_4567_89AB_CDEFu64;
         let words = [word];

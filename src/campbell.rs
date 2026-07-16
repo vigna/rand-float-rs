@@ -33,10 +33,12 @@
 //! (Campbell, 2014). These functions return an `f64` distributed as a uniform
 //! real in [0 . . 1] correctly rounded to nearest. The `binary64fast.c`
 //! functions ([`fast`] and the const-time variants) stop after two exponent
-//! words, so they reach every float in [2⁻¹²⁸ . . 1], and 0, each with
-//! probability equal to the measure of the reals that round to it; [`real`]
-//! keeps consuming words, and reaches every float in [0 . . 1], including all
-//! subnormals.
+//! words, so they reach every float in [2⁻¹²⁸ . . 1], each with
+//! probability equal to the measure of the reals that round to it, except
+//! that the reals below 2⁻¹²⁸ (probability 2⁻¹²⁸) are folded into the bottom
+//! binade. In particular, 0 never occurs: [`real`] keeps consuming words,
+//! and reaches every float in [2⁻¹⁰²⁴ . . 1], plus 0 (see its documentation
+//! for why the smaller subnormals cannot occur).
 //!
 //! Two variants handle the zero-`m` event without data-dependent branching, for
 //! use where timing side channels matter; they unconditionally consume three
@@ -44,7 +46,7 @@
 //! “bit smearing“ technique of the original C is replaced by a comparison that
 //! the compiler can turn into a conditional-move instruction (Taylor does not
 //! want to rely on the compiler for the absence of tests, but the smearing is
-//! much slower).
+//! much slower.)
 //!
 //! If you compare generated code with older copies of `binary64fast.c` you
 //! might find a signed where an unsigned integer-to-double conversion
@@ -62,7 +64,7 @@ const TWO_P32: f64 = 4294967296.0;
 /// word `m` and a significand word `u` into a correctly rounded (to
 /// nearest) uniform binary64.
 #[inline(always)]
-pub fn fastdet(f: f64, m: u64, u: u64) -> f64 {
+pub const fn fastdet(f: f64, m: u64, u: u64) -> f64 {
     // Largest power-of-two divisor of m, with bit 63 forced as a backstop
     // against a broken all-zero source; exactly representable, so the
     // conversion below is exact.
@@ -107,7 +109,7 @@ pub fn fast(mut bits: impl FnMut() -> u64) -> f64 {
 /// both branch-free. See the [module documentation](self) for the
 /// signed-arithmetic form of the rescaling.
 #[inline(always)]
-fn consttime_tail(t: u64, u: u64, m: u64, m2: u64) -> f64 {
+const fn consttime_tail(t: u64, u: u64, m: u64, m2: u64) -> f64 {
     let mut f = TWO_M64;
     let tf = t as i64 as f64;
     f *= tf - (tf - 1.0) * TWO_M64;
@@ -116,14 +118,14 @@ fn consttime_tail(t: u64, u: u64, m: u64, m2: u64) -> f64 {
 }
 
 /// Port of `uniformbinary64_consttime_if`: like [`fast`], but the zero-`m`
-/// event is handled branch-free, with the flag computed as `m != 0`.
+/// event is branchless, with the flag computed as `m != 0`.
 ///
-/// This is Sebastiano Vigna's variant: it relies on the compiler turning
-/// the comparison into a conditional-move–style instruction (`setne`,
-/// `cset`) rather than a branch. Campbell prefers the bit-smearing variant
-/// ([`consttime`]) because, for security reasons, it guarantees at the
-/// source level that no test can be inserted by the compiler, whereas here
-/// the absence of a branch is at the optimizer's discretion.
+/// This is a small variant of mine: it relies on the compiler turning the
+/// comparison into a conditional-move–style instruction (`setne`, `cset`)
+/// rather than a branch. Taylor prefers the bit-smearing variant
+/// ([`consttime`]) because, for security reasons, it guarantees at the source
+/// level that no test can be inserted by the compiler, whereas here the absence
+/// of a branch is at the optimizer's discretion.
 ///
 /// Always consumes three 64-bit words.
 #[inline(always)]
@@ -133,12 +135,12 @@ pub fn consttime_cmove(mut bits: impl FnMut() -> u64) -> f64 {
     consttime_tail(t, u, m, m2)
 }
 
-/// Port of `uniformbinary64_consttime_smear`: like [`consttime_cmove`], but
-/// the flag is computed by smearing every set bit of `m` down to bit 0 —
-/// branch-free at the source level, independent of the optimizer. This is
-/// the variant Campbell prefers for security-sensitive uses, since no
-/// compiler-inserted test can leak the (secret) value of `m` through a
-/// timing side channel.
+/// Port of `uniformbinary64_consttime_smear`: like [`consttime_cmove`], but the
+/// flag is computed by smearing every set bit of `m` down to bit 0, so it is
+/// branchless at the source level, independently of the compiler. This is the
+/// variant Taylor prefers for security-sensitive uses, since no
+/// compiler-inserted test can leak the (secret) value of `m` through a timing
+/// side channel.
 ///
 /// Always consumes three 64-bit words.
 #[inline(always)]
@@ -162,19 +164,28 @@ const TWO_M960: f64 = f64::from_bits((1023 - 960) << 52);
 /// Port of `random_real` from `random_real.c`: interprets an unbounded
 /// stream of random bits as the binary expansion of a real number in
 /// [0 . . 1] and rounds it to the nearest `f64`, with a sticky bit avoiding
-/// ties. Every float in [0 . . 1] is reachable, including all subnormals;
-/// 0 itself is returned only after 1088 zero bits, i.e., only if the
-/// source is broken.
+/// ties. Every float in [2⁻¹⁰²⁴ . . 1] is reachable; 0 is returned after
+/// 1024 zero bits (probability 2⁻¹⁰²⁴, i.e., only if the source is broken),
+/// and the subnormals below 2⁻¹⁰²⁴ cannot occur.
+///
+/// This documentation differs from the comments in the C original, which
+/// claims to reach every float in [0 . . 1] and to return 0 only when the
+/// result is guaranteed to round to zero: the all-zeros cutoff fires one
+/// word too early (after 16 rather than 17 zero words) discarding
+/// continuations as large as ≈2⁻¹⁰²⁴ that would round to smaller
+/// subnormals. This is a minor bug we found while porting and reported to
+/// the author; it affects an event of probability 2⁻¹⁰²⁴, and the code
+/// below is left faithful to the original.
 ///
 /// Consumes one 64-bit word, plus one more with probability 1/2 (when the
 /// first word has leading zeros), plus one word per 64 leading zero bits.
-/// The expected number of words per call is 1.5 + ε.
+/// The expected number of words per call is ≈1.5.
 ///
 /// The C original scales by `ldexp(significand, exponent)`; Rust has no
 /// `ldexp` in the standard library, and a single multiplication cannot
 /// replace it, since 2^exponent can be as small as 2⁻¹⁰⁸⁷, which is not
-/// representable. The port multiplies by 2⁻⁹⁶⁰ first — exact, since the
-/// intermediate result stays normal — and then by 2^(exponent + 960),
+/// representable. The port multiplies by 2⁻⁹⁶⁰ first (exact, since the
+/// intermediate result stays normal) and then by 2^(exponent + 960),
 /// which is always representable, so the result is rounded once, exactly
 /// as in `ldexp`.
 #[inline(always)]
@@ -186,9 +197,11 @@ pub fn real(mut bits: impl FnMut() -> u64) -> f64 {
     let mut significand = bits();
     while significand == 0 {
         exponent -= 64;
-        // Below -1074 = emin + 1 - p the result is guaranteed to round to
-        // zero; this can happen in realistic terms only if the source is
-        // broken.
+        // The C original claims that below -1074 = emin + 1 - p the result
+        // is guaranteed to round to zero, but the check fires one word too
+        // early (see the doc comment); kept as is for faithfulness to the
+        // original. This can happen in realistic terms only if the source
+        // is broken.
         if exponent < -1074 {
             return 0.0;
         }
@@ -229,7 +242,7 @@ mod tests {
     }
 
     #[test]
-    fn stays_in_closed_unit_interval() {
+    fn test_stays_in_closed_unit_interval() {
         let mut rng = Weyl(42);
         for _ in 0..100_000 {
             let x = fast(|| rng.next_u64());
@@ -243,7 +256,7 @@ mod tests {
 
     /// The two const-time variants must agree on every input.
     #[test]
-    fn consttime_variants_agree() {
+    fn test_consttime_variants_agree() {
         let mut rng = Weyl(0xDEAD_BEEF);
         for _ in 0..100_000 {
             let words = [rng.next_u64(), rng.next_u64(), rng.next_u64()];
@@ -254,7 +267,7 @@ mod tests {
     /// With a nonzero m, the const-time variants must agree with the
     /// branchy variant (which then ignores the third word).
     #[test]
-    fn consttime_agrees_with_fast() {
+    fn test_consttime_agrees_with_fast() {
         let mut rng = Weyl(0xBADC_0FFE);
         for _ in 0..100_000 {
             let words = [rng.next_u64(), rng.next_u64().max(1), rng.next_u64()];
@@ -265,7 +278,7 @@ mod tests {
     /// The signed-arithmetic fix: with m = 0 the scale must become 2⁻¹²⁸
     /// (not go negative as with the unsigned `(t - 1)` of the original C).
     #[test]
-    fn consttime_zero_mantissa_rescales() {
+    fn test_consttime_zero_mantissa_rescales() {
         let u = 0x0123_4567_89AB_CDEF;
         let m2 = 0x8000_0000_0000_0000u64; // power of two: d = 2^63
         let x = consttime_cmove(replay(&[u, 0, m2]));
@@ -279,7 +292,7 @@ mod tests {
     /// Known values of `real`, pinning the two-step `ldexp` replacement
     /// (verified bit-for-bit against the compiled C original).
     #[test]
-    fn real_known_values() {
+    fn test_real_known_values() {
         // Top bit set: one word, no refill; 2^63 | 1 rounds to 2^63.
         assert_eq!(real(replay(&[1 << 63])), 0.5);
         // All ones rounds up to 2^64: the maximum output, exactly 1.
@@ -295,7 +308,7 @@ mod tests {
     }
 
     #[test]
-    fn real_stays_in_closed_unit_interval() {
+    fn test_real_stays_in_closed_unit_interval() {
         let mut rng = Weyl(7);
         for _ in 0..100_000 {
             let x = real(|| rng.next_u64());

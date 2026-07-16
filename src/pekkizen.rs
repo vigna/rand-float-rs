@@ -1,37 +1,21 @@
-// Derived from the uniFloats wiki of https://github.com/pekkizen/prng
-// (functions Float64_64, Float64_117 and Float64full), distributed under the
-// following license:
+// Derived from the uniFloats wiki https://github.com/pekkizen/prng (functions
+// Float64_64, Float64_117 and Float64full), distributed under the following
+// license:
 //
-// MIT License
+// Copyright (c) 2020, Pekka Pulkkinen
 //
-// Copyright (c) 2020 pekkizen <pekkizen@gmail.com>
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Copying and distribution of this article, ideas and source code are permitted
+// worldwide, without royalty, in any medium, provided the copyright notice is
+// preserved and a reference to this article is given.
 
-//! pekkizen’s leading-zeros technique.
+//! Pekka Pulkkinen’s leading-zeros technique.
 //!
-//! A Rust port of `Float64_64`, `Float64_117` and `Float64full` from
-//! [pekkizen’s uniFloats wiki](https://github.com/pekkizen/prng/wiki/uniFloats)
-//! (explicit bit-building forms). One 64-bit word is interpreted as a
-//! uniform fixed-point real in [0 . . 1): the count of leading zeros
-//! picks the binade (a geometric distribution), and the remaining bits are
-//! shifted into the mantissa.
+//! A Rust port of `Float64_64`, `Float64_117` and `Float64full` from [Pekka
+//! Pulkkinen’s uniFloats
+//! wiki](https://github.com/pekkizen/prng/wiki/uniFloats). One 64-bit word is
+//! interpreted as a uniform fixed-point real in [0 . . 1): the count of leading
+//! zeros picks the binade (a geometric distribution), and the remaining bits
+//! are shifted into the mantissa.
 //!
 //! The three variants differ in how far down the fixed point extends:
 //!
@@ -50,10 +34,6 @@
 /// Returns a random `f64` distributed as a uniform 64-bit fixed-point real
 /// in [0 . . 1) rounded down to the nearest representable value: every float
 /// in [2⁻¹² . . 1), and the 2⁵² multiples of 2⁻⁶⁴ below 2⁻¹².
-///
-/// The Go original computes `u << z` with z possibly 64, which Go defines
-/// as 0; Rust declares 64-bit shifts overflow, so the shift is split as
-/// `(u << (z - 1)) << 1` (z ≥ 1 always).
 #[inline]
 pub fn f64_64(mut bits: impl FnMut() -> u64) -> f64 {
     let u = bits();
@@ -61,12 +41,15 @@ pub fn f64_64(mut bits: impl FnMut() -> u64) -> f64 {
         return 0.0;
     }
     let z = u.leading_zeros() as u64 + 1;
+    // The Go original computes `u << z` with z possibly 64, which Go defines
+    // as 0; Rust declares 64-bit shifts overflow, so the shift is split as
+    // `(u << (z - 1)) << 1` (z ≥ 1 always).
     f64::from_bits((1023 - z) << 52 | ((u << (z - 1)) << 1) >> 12)
 }
 
 /// Returns 2⁻ⁿ as an `f64`; `n` must be at most 1022.
 #[inline]
-fn two_to_minus(n: u64) -> f64 {
+const fn two_to_minus(n: u64) -> f64 {
     debug_assert!(n <= 1022);
     f64::from_bits((1023 - n) << 52)
 }
@@ -90,8 +73,9 @@ pub fn f64_117(mut bits: impl FnMut() -> u64) -> f64 {
     crate::cold::cold_barrier();
     let z = z - 1;
     // The Go original computes `u << z` with z possibly 64 (first word 0),
-    // which Go defines as 0; `unbounded_shl` mirrors that.
-    let u = u.unbounded_shl(z as u32) | bits() >> (64 - z);
+    // which Go defines as 0; `checked_shl` + `unwrap_or` mirrors that
+    // (as would `unbounded_shl`, which however requires Rust 1.87).
+    let u = u.checked_shl(z as u32).unwrap_or(0) | bits() >> (64 - z);
     (u >> 11) as f64 * two_to_minus(53 + z)
 }
 
@@ -123,8 +107,9 @@ pub fn f64_full(mut bits: impl FnMut() -> u64) -> f64 {
         }
     }
     // The Go original computes `bits() >> (64 - z)` with z possibly 0 after
-    // the loop, which Go defines as 0; `unbounded_shr` mirrors that.
-    let u = u << z | bits().unbounded_shr(64 - z as u32);
+    // the loop, which Go defines as 0; `checked_shr` + `unwrap_or` mirrors
+    // that (as would `unbounded_shr`, which however requires Rust 1.87).
+    let u = u << z | bits().checked_shr(64 - z as u32).unwrap_or(0);
     exp += z;
     if exp < 1022 {
         return f64::from_bits((1022 - exp) << 52 | (u << 1) >> 12);
@@ -141,7 +126,7 @@ mod tests {
     /// The bit-building form must agree with the wiki’s division form,
     /// `float64(u << z >> 11) / 2^53 / 2^z` with z = leadingZeros(u).
     #[test]
-    fn matches_reference_division_form() {
+    fn test_matches_reference_division_form() {
         let division_form = |u: u64| {
             let z = u.leading_zeros();
             let m = ((u << z) >> 11) as f64;
@@ -155,7 +140,7 @@ mod tests {
     }
 
     #[test]
-    fn range() {
+    fn test_range() {
         let mut rng = Weyl(42);
         for _ in 0..100_000 {
             let x = f64_64(|| rng.next_u64());
@@ -165,7 +150,7 @@ mod tests {
 
     /// Extremes of the leading-zeros count.
     #[test]
-    fn edge_cases() {
+    fn test_edge_cases() {
         assert_eq!(f64_64(|| 1 << 63), 0.5);
         assert_eq!(f64_64(|| u64::MAX), f64::from_bits(1.0f64.to_bits() - 1));
         assert_eq!(f64_64(|| 1), f64::from_bits((1023 - 64) << 52)); // 2^-64
@@ -181,7 +166,7 @@ mod tests {
     /// branch (fast path, slow path, extreme leading-zero counts, zero
     /// words).
     #[test]
-    fn known_values_117() {
+    fn test_known_values_117() {
         for (words, expected) in [
             (&[0x8000000000000000, 0][..], 0x3fe0000000000000u64),
             (&[0xDEADBEEFDEADBEEF, 0][..], 0x3febd5b7ddfbd5b7),
@@ -204,7 +189,7 @@ mod tests {
     /// sequences exercise the zero-word zoom, the subnormal construction and
     /// the all-zeros cutoff (which fires before the final exponent add).
     #[test]
-    fn known_values_full() {
+    fn test_known_values_full() {
         for (words, expected) in [
             (vec![0x8000000000000000], 0x3fe0000000000000u64),
             (vec![0xDEADBEEFDEADBEEF], 0x3febd5b7ddfbd5b7),
@@ -241,7 +226,7 @@ mod tests {
     /// code of the wiki driven by the same Weyl source. The two variants
     /// agree on any zero-free source stream.
     #[test]
-    fn matches_go_reference_hash() {
+    fn test_matches_go_reference_hash() {
         let mut rng = Weyl(42);
         let mut h = 0u64;
         for _ in 0..1_000_000 {
@@ -258,7 +243,7 @@ mod tests {
     }
 
     #[test]
-    fn range_117_full() {
+    fn test_range_117_full() {
         let mut rng = Weyl(42);
         for _ in 0..100_000 {
             let x = f64_117(|| rng.next_u64());
