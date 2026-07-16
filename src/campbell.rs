@@ -166,7 +166,7 @@ const TWO_M960: f64 = f64::from_bits((1023 - 960) << 52);
 /// AVX-512F provides `ldexp` in hardware (`vscalefsd`, x·2^⌊e⌋ with a
 /// single rounding, subnormals included), so a single instruction
 /// replaces the two-multiplication sequence of the portable version
-/// below, with bit-for-bit identical results.
+/// below.
 #[cfg(all(target_arch = "x86_64", target_feature = "avx512f"))]
 #[inline(always)]
 fn ldexp_sig(significand: u64, exponent: i32) -> f64 {
@@ -223,7 +223,7 @@ fn ldexp_sig(significand: u64, exponent: i32) -> f64 {
 /// which is always representable, so the result is rounded once, exactly
 /// as in `ldexp`. On x86-64 compiled with AVX-512F the port uses instead
 /// the hardware `ldexp` (a single `vscalefsd` instruction) via inline
-/// assembly, with bit-for-bit identical results.
+/// assembly.
 #[inline(always)]
 pub fn real(mut bits: impl FnMut() -> u64) -> f64 {
     let mut exponent = -64i32;

@@ -57,7 +57,10 @@ jobs:
 
   # The vscalefsd (hardware ldexp) path of campbell::real is compiled only
   # under target-feature=+avx512f: always build it, and run the test suite
-  # against it when the runner's CPU has AVX-512.
+  # against it when the runner's CPU has AVX-512. The explicit --target,
+  # although equal to the host, keeps RUSTFLAGS away from build scripts and
+  # proc macros, which run on the runner and would SIGILL if compiled with
+  # AVX-512 code on a CPU without it.
   test-avx512:
     runs-on: ubuntu-latest
     needs: lint
@@ -66,11 +69,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Build with AVX-512F
-        run: cargo build --all-targets --verbose
+        run: cargo build --all-targets --target x86_64-unknown-linux-gnu --verbose
       - name: Run tests with AVX-512F (only on a capable runner)
         run: |
           if grep -q avx512f /proc/cpuinfo; then
-            cargo test --verbose
+            cargo test --target x86_64-unknown-linux-gnu --verbose
           else
             echo "Runner CPU lacks AVX-512F; build-only check."
           fi
