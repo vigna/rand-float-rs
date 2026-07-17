@@ -3,7 +3,7 @@
 pub mod badizadegan;
 pub mod campbell;
 pub mod cold;
+pub mod division;
 pub mod pekkizen;
 pub mod sources;
-pub mod standard;
 pub mod uniform;

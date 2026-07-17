@@ -2,8 +2,8 @@
 //!
 //! This module is an alias for [`pekkizen`], whose
 //! leading-zeros technique provides complete coverage of [0 . . 1) at
-//! almost the cost of the standard 53-bit scaling, consuming one 64-bit
-//! word per call with probability 1 − 2⁻¹².
+//! almost the cost of the 53-bit [`division`] scaling, consuming one
+//! 64-bit word per call with probability 1 − 2⁻¹².
 //!
 //! The [`unif_01`] function converts any source of random 64-bit words;
 //! with the `rand` feature (enabled by default), the [`Unif01Ext`]
@@ -13,6 +13,7 @@
 //!
 //! [`rand`]: https://crates.io/crates/rand
 //! [`pekkizen`]: crate::pekkizen
+//! [`division`]: crate::division
 //! [method]: Unif01Ext::unif_01
 
 pub use crate::pekkizen::*;

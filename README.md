@@ -3,7 +3,7 @@
 This crate implements several techniques for converting streams of random bits
 into floating-point numbers distributed as a uniform real in the unit interval.
 
-The standard technique of extracting 53 bits and dividing by 2⁵³, used, for
+The division technique of extracting 53 bits and dividing by 2⁵³, used, for
 example, by the [`rand`] crate, provides 2⁵³
 equispaced floating-point numbers, but cannot generate almost all the
 floating-point numbers in the unit interval. The techniques in this crate will
@@ -42,6 +42,29 @@ cases definitely hostile notation. By gathering all techniques in the same
 place, we have a common ground for comparison and benchmarking, and cross
 references for future implementations.
 
+The provided `gaussian_tail` example shows the statistical defects caused by the
+division technique when generating a large number of Gaussian deviates by
+inversion:
+
+```text
+1.2e12 draws per converter on 10 threads, seed 42
+
+x/2^53 + zero guard:
+  286733 deviates beyond -5.035σ in 118 s; 17 bit-identical duplicates
+    -5.7127σ drawn 2 times
+    -5.3617σ drawn 2 times
+    -5.3529σ drawn 2 times
+unif_01:
+  286748 deviates beyond -5.035σ in 246 s; 0 bit-identical duplicates
+```
+
+The detected collisions are statistically impossible: their presence is
+only due to the fact that the division technique quantizes the tail of
+the Gaussian distribution — below 2⁻²² it can return just 2³¹ distinct
+values, all multiples of 2⁻⁵³. For the same reason it cuts off the tail
+arbitrarily, as it never returns nonzero numbers closer to zero than
+2⁻⁵³.
+
 Every technique is implemented as a pure transformation of a source of
 uniform random 64-bit words (any `FnMut() -> u64`), documented with its
 exact output distribution, and benchmarked against the others.
@@ -53,7 +76,7 @@ reported to the authors.
 
 | Module          | Origin                                        | Distribution                                     | Reachable values                                               | Words per `f64`             |
 | --------------- | --------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------- | --------------------------- |
-| [`standard`]    | folklore                                      | equispaced                                       | the 2⁵³ multiples of 2⁻⁵³ in [0 . . 1)                         | 1                           |
+| [`division`]    | folklore                                      | equispaced                                       | the 2⁵³ multiples of 2⁻⁵³ in [0 . . 1)                         | 1                           |
 | [`pekkizen`]    | [Pekka Pulkkinen's uniFloats] (`Float64_64`)  | uniform real rounded **down** to a 2⁻⁶⁴ grid     | every float in [2⁻¹² . . 1); 2⁵² values spaced 2⁻⁶⁴ below 2⁻¹² | 1                           |
 | [`pekkizen`]    | [Pekka Pulkkinen's uniFloats] (`Float64_117`) | uniform real rounded **down** to a 2⁻¹¹⁷ grid    | every float in [2⁻⁶⁵ . . 1); multiples of 2⁻¹¹⁷ below 2⁻⁶⁵     | 1 + ≈2⁻¹²                   |
 | [`pekkizen`]    | [Pekka Pulkkinen's uniFloats] (`Float64full`) | uniform real in [0 . . 1) rounded **down**       | every float in [0 . . 1), including all subnormals             | 1 + ≈2⁻¹²                   |
@@ -87,7 +110,7 @@ A few observations:
 ## Using specific techniques
 
 ```rust
-use rand_float::{badizadegan, campbell, pekkizen, standard};
+use rand_float::{badizadegan, campbell, division, pekkizen};
 
 struct Xoroshiro128pp([u64; 2]);
 
@@ -102,7 +125,7 @@ impl Xoroshiro128pp {
 }
 
 let mut src = Xoroshiro128pp([0x243F6A8885A308D3, 0x13198A2E03707344]);
-let a = standard::f64_53bits(|| src.next_u64());
+let a = division::f64_53bits(|| src.next_u64());
 let b = pekkizen::f64_64(|| src.next_u64());
 let c = campbell::fast(|| src.next_u64());
 let d = badizadegan::f64_down(|| src.next_u64());
@@ -187,7 +210,7 @@ header of the respective source files:
 [`unif_01`]: https://docs.rs/rand-float/latest/rand_float/uniform/fn.unif_01.html
 [method]: https://docs.rs/rand-float/latest/rand_float/uniform/trait.Unif01Ext.html#tymethod.unif_01
 [`Unif01Ext`]: https://docs.rs/rand-float/latest/rand_float/uniform/trait.Unif01Ext.html
-[`standard`]: https://docs.rs/rand-float/latest/rand_float/standard/
+[`division`]: https://docs.rs/rand-float/latest/rand_float/division/
 [`pekkizen`]: https://docs.rs/rand-float/latest/rand_float/pekkizen/
 [`campbell`]: https://docs.rs/rand-float/latest/rand_float/campbell/
 [`campbell::real`]: https://docs.rs/rand-float/latest/rand_float/campbell/fn.real.html

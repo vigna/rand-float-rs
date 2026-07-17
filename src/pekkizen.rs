@@ -28,10 +28,10 @@
 //!
 //! All variants consume one word per call with probability 1 − 2⁻¹² and, in
 //! the typical case, cost only a couple of operations more than
-//! [`standard`] scaling.
+//! [`division`] scaling.
 //!
 //! [Pekka Pulkkinen’s uniFloats wiki]: https://github.com/pekkizen/prng/wiki/uniFloats
-//! [`standard`]: crate::standard
+//! [`division`]: crate::division
 
 /// Returns a random `f64` distributed as a uniform 64-bit fixed-point real
 /// in [0 . . 1) rounded down to the nearest representable value: every float

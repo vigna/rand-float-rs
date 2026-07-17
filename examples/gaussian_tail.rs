@@ -1,50 +1,20 @@
-//! Bit-identical extreme deviates: 53-bit scaling quantizes the
-//! Gaussian tail.
+//! Statistically impossible collisions in the Gaussian tail.
 //!
-//! Section 3.1 of the survey [“Gaussian Random Number Generators”] by
-//! Thomas, Luk, Leong and Villasenor (ACM Comput. Surv. 39(4), 2007)
-//! shows (Fig. 7) that scaling an integer by 2⁻ʷ produces floats that
-//! inherit the coarse, equispaced resolution of fixed point near zero —
-//! precisely where the transformations turning uniforms into normal
-//! deviates are singular. Under CDF inversion (their section 2.1) the
-//! deepest uniforms become the most extreme deviates, so the defect
-//! surfaces at the tail: below −5.03σ (u < 2⁻²²) the ubiquitous 53-bit
-//! scaling ([`standard::f64_53bits`]) can produce only 2³¹ distinct
-//! deviates, all on a lattice of pitch 2⁻⁵³.
+//! This example draws a large number of Gaussian deviates by inversion and
+//! counts the duplicate values in the tail. Such duplicates are statistically
+//! impossible in theory, and also in practice when the whole range of
+//! floating-point numbers is available, but they are generated easily
+//! if one uses division instead of the techniques described in this crate.
 //!
-//! This is observable in an honest simulation, with any seed. The
-//! survey estimates 10⁸ deviates per second per machine, 10¹⁷ per
-//! cluster-sized simulation; the 1.2·10¹² draws per converter run here
-//! (a few minutes on a parallel machine) collect about 286,000 deviates
-//! beyond −5.03σ. On the 2³¹-point lattice the birthday effect makes
-//! about 19 of them bit-for-bit copies of another, supposedly
-//! independent, extreme event — the kind of anomaly any
-//! peaks-over-threshold analysis of the simulation output would
-//! surface — and the greatest common divisor of the whole tail sample
-//! is exactly 2⁻⁵³. [`uniform::unif_01`] reaches every representable
-//! double with the probability of the reals rounding down to it (the
-//! property section 3.1 credits Matlab’s `rand` with): the same run
-//! yields zero duplicates (about 3·10⁻⁶ expected) and no lattice.
-//!
-//! The duplicates are the early symptom of the same quantization whose
-//! extreme form is tail truncation: 53-bit scaling cannot produce any
-//! deviate below Φ⁻¹(2⁻⁵³) ≈ −8.21σ (the survey’s target is 10σ), while
-//! complete coverage reaches Φ⁻¹(2⁻¹⁰⁷⁴) ≈ −38.5σ. Truncation only
-//! becomes visible beyond ~10¹⁶ draws; the lattice is visible today.
-//!
-//! Run with `cargo run --release --example gaussian_tail`; an optional
-//! argument overrides the number of draws per converter (e.g. `1e10`
-//! for a quick, seconds-long run — too short to accumulate duplicates).
-//!
-//! [“Gaussian Random Number Generators”]: https://doi.org/10.1145/1287620.1287622
-//! [`standard::f64_53bits`]: rand_float::standard::f64_53bits
-//! [`uniform::unif_01`]: rand_float::uniform::unif_01
+//! Run with `cargo run --release --example gaussian_tail`; an optional argument
+//! overrides the number of draws per converter (e.g. `1e10` for a quick,
+//! seconds-long run which, however, is too short to accumulate duplicates).
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
-use rand_float::standard::f64_53bits;
+use rand_float::division::f64_53bits;
 use rand_float::uniform::unif_01;
 
 /// Any seed exhibits the phenomenon; change at will.
@@ -67,26 +37,26 @@ const fn mix(mut z: u64) -> u64 {
     z ^ (z >> 31)
 }
 
-/// A Weyl generator, as [`rand_float::sources::Weyl`] but with a
-/// per-stream increment: the cheapest possible source, one add per
-/// word. The increment must vary across blocks: within a stream the
-/// word following a tail hit w is always w + increment, so with a
-/// single shared increment the sub-2⁻⁵³ bits [`f64_full`] fills in
-/// would be the same constant for every hit, and the full conversion
-/// would inherit the duplicates instead of removing them.
+/// [MWC192], a multiply-with-carry generator.
 ///
-/// [`f64_full`]: rand_float::pekkizen::f64_full
-struct Weyl {
-    state: u64,
-    /// Must be odd.
-    incr: u64,
+/// [MWC192]: https://prng.di.unimi.it/MWC192.c
+struct Mwc192 {
+    x: u64,
+    y: u64,
+    c: u64,
 }
 
-impl Weyl {
+impl Mwc192 {
+    const MWC_A2: u64 = 0xFFA04E67B3C95D86;
+
     #[inline(always)]
     fn next_u64(&mut self) -> u64 {
-        self.state = self.state.wrapping_add(self.incr);
-        self.state
+        let result = self.y;
+        let t = Self::MWC_A2 as u128 * self.x as u128 + self.c as u128;
+        self.x = self.y;
+        self.y = t as u64;
+        self.c = (t >> 64) as u64;
+        result
     }
 }
 
@@ -120,11 +90,9 @@ fn probit_tail(p: f64) -> f64 {
 
 /// Runs `draws` conversions on all cores and returns the sorted bit
 /// patterns of the uniforms that fell below [`THRESHOLD`]. Each
-/// [`BLOCK`]-sized work unit runs its own [`Weyl`] stream, with state
-/// and increment scrambled from the block index, so distinct blocks are
-/// statistically independent and the sample does not depend on how
-/// blocks are scheduled onto threads.
-fn tail_draws(draws: u64, convert: impl Fn(&mut Weyl) -> f64 + Sync) -> Vec<u64> {
+/// [`BLOCK`]-sized work unit runs its own [`Mwc192`] stream, seeded by
+/// scrambling the block index.
+fn tail_draws(draws: u64, convert: impl Fn(&mut Mwc192) -> f64 + Sync) -> Vec<u64> {
     let blocks = draws.div_ceil(BLOCK);
     let next = AtomicU64::new(0);
     let hits = Mutex::new(Vec::new());
@@ -138,9 +106,10 @@ fn tail_draws(draws: u64, convert: impl Fn(&mut Weyl) -> f64 + Sync) -> Vec<u64>
                     if b >= blocks {
                         break;
                     }
-                    let mut src = Weyl {
-                        state: mix(SEED ^ (2 * b)),
-                        incr: mix(SEED ^ (2 * b + 1)) | 1,
+                    let mut src = Mwc192 {
+                        x: mix(SEED ^ (2 * b)),
+                        y: mix(SEED ^ (2 * b + 1)),
+                        c: 1,
                     };
                     for _ in 0..BLOCK.min(draws - b * BLOCK) {
                         let u = convert(&mut src);
@@ -166,7 +135,7 @@ fn tail_draws(draws: u64, convert: impl Fn(&mut Weyl) -> f64 + Sync) -> Vec<u64>
 fn report(hits: &[u64], seconds: f64) -> usize {
     let duplicates = hits.len() - hits.chunk_by(|a, b| a == b).count();
     println!(
-        "  {} deviates beyond {:.3}σ in {seconds:.0} s; {duplicates} bit-identical duplicates",
+        "  {} deviates beyond {:.3}σ in {seconds:.0} s; {duplicates} duplicates",
         hits.len(),
         probit_tail(THRESHOLD),
     );
@@ -174,11 +143,7 @@ fn report(hits: &[u64], seconds: f64) -> usize {
     for run in hits.chunk_by(|a, b| a == b) {
         if run.len() > 1 && shown < 3 {
             let u = f64::from_bits(run[0]);
-            println!(
-                "    {:+.4}σ drawn {} times (u = {u:e})",
-                probit_tail(u),
-                run.len()
-            );
+            println!("    {:+.4}σ drawn {} times", probit_tail(u), run.len());
             shown += 1;
         }
     }

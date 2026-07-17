@@ -10,7 +10,7 @@
 use criterion::{
     BenchmarkGroup, Criterion, Throughput, criterion_group, criterion_main, measurement::WallTime,
 };
-use rand_float::{badizadegan, campbell, pekkizen, sources::Weyl, standard};
+use rand_float::{badizadegan, campbell, division, pekkizen, sources::Weyl};
 
 const SEED: u64 = 0x0123_4567_89AB_CDEF;
 const FILL: usize = 1024;
@@ -56,8 +56,8 @@ fn bench_fill(g: &mut BenchmarkGroup<WallTime>, name: &str, mut f: impl FnMut(&m
 macro_rules! bench_all {
     ($g:expr, $one:ident) => {
         $one($g, "weyl_baseline", |r| f64::from_bits(r.next_u64()));
-        $one($g, "standard_53bits", |r| {
-            standard::f64_53bits(|| r.next_u64())
+        $one($g, "division_53bits", |r| {
+            division::f64_53bits(|| r.next_u64())
         });
         $one($g, "pekkizen_64", |r| pekkizen::f64_64(|| r.next_u64()));
         $one($g, "pekkizen_117", |r| pekkizen::f64_117(|| r.next_u64()));
