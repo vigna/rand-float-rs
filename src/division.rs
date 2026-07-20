@@ -37,7 +37,7 @@ mod tests {
     use crate::sources::Weyl;
 
     #[test]
-    fn range_and_distribution() {
+    fn test_range_and_distribution() {
         let mut rng = Weyl(42);
         for _ in 0..100_000 {
             let x = f64_53bits(|| rng.next_u64());
@@ -51,7 +51,7 @@ mod tests {
     }
 
     #[test]
-    fn extremes() {
+    fn test_extremes() {
         assert_eq!(f64_53bits(|| 0), 0.0);
         assert_eq!(f64_53bits(|| !0u64), 1.0 - TWO_M53);
         assert_eq!(f32_24bits(|| 0), 0.0);

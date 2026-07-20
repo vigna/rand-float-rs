@@ -1,6 +1,13 @@
 # Change Log
 
-## unreleased
+## [0.2.1] - 2026-07-20
+
+### New
+
+- The landing page now points at an example of the problem of the division
+  method in differential privacy.
+
+### Improved
 
 - Following a suggestion in a pull request by Reiner Pope, the code for
   pekkizen has been slightly simplified.
