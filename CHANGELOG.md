@@ -1,5 +1,11 @@
 # Change Log
 
+## [0.2.2] - 2026-07-22
+
+### New
+
+- Added links to MatLab generation strategy and a few papers.
+
 ## [0.2.1] - 2026-07-20
 
 ### New
