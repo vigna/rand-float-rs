@@ -1,5 +1,13 @@
 # rand-float
 
+[![crates.io](https://img.shields.io/crates/v/rand-float.svg)](https://crates.io/crates/rand-float)
+[![docs.rs](https://docs.rs/rand-float/badge.svg)](https://docs.rs/rand-float)
+[![rustc](https://img.shields.io/badge/rustc-1.85+-red.svg)](https://rust-lang.github.io/rfcs/2495-min-rust-version.html)
+[![CI](https://github.com/vigna/rand-float-rs/actions/workflows/rust.yml/badge.svg)](https://github.com/vigna/rand-float-rs/actions)
+![license](https://img.shields.io/crates/l/rand-float)
+[![downloads](https://img.shields.io/crates/d/rand-float)](https://crates.io/crates/rand-float)
+[![coveralls](https://coveralls.io/repos/github/vigna/rand-float-rs/badge.svg?branch=main)](https://coveralls.io/github/vigna/rand-float-rs?branch=main)
+
 This crate implements several techniques for converting streams of random bits
 into floating-point numbers distributed as a uniform real in the unit interval.
 

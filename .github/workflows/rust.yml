@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: ["main"]
 
+# Least-privilege default token: jobs only need to read repository contents.
+# The coverage job uploads to Coveralls using GITHUB_TOKEN, which needs only
+# read access here.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -79,3 +85,25 @@ jobs:
           else
             echo "Runner CPU lacks AVX-512F; build-only check."
           fi
+
+  coverage:
+    needs: test
+    name: coverage
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    container:
+      image: xd009642/tarpaulin:develop-nightly
+      options: --security-opt seccomp=unconfined
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Generate code coverage
+        run: |
+          cargo +nightly tarpaulin --verbose --engine llvm --all-features --workspace --out Lcov
+
+      - name: Coveralls
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-lcov: "lcov.info"
